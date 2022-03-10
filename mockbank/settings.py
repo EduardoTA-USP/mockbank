@@ -32,6 +32,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# If user is not logged in redirect to this url
+LOGIN_REDIRECT_URL = 'authorize'
 
 # Application definition
 
@@ -42,6 +44,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'api',
+    'oauth',
+    'rest_framework',
+    'djmoney',
 ]
 
 MIDDLEWARE = [

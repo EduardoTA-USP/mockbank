@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorize</title>
+</head>
+<body>
+    <div id="app" class="d-flex justify-content-center align-items-center">
+        <main class="auth-container" style="min-height: auto;">
+          <header class="header">
+            <h2>Authorize {{ grant.client.client_name }}</h2>
+          </header>
+          <p>{% if grant.client.website %}
+            <a href="{{ grant.client.website }}" target="_blank" rel="noreferrer" title="{{ grant.client.client_name|safe }}">
+              {{ grant.client.client_name|safe }}
+            </a>{% else %}
+            <span>{{ grant.client.client_name|safe }}</span>{% endif %}
+            wants to access your <b>{{user.username}}</b> account.
+          </p>
+          <form method="post">
+            <ul class="list-unstyled">
+              {% if 'read:profile' in scopes %}<li>
+                <label>
+                  <input type="hidden" name="scope_list" value="read:profile"><input type="checkbox" checked disabled>
+                  Read profile
+                </label>
+              </li>{% endif %}
+              {% if 'openid' in scopes %}<li>
+                <label>
+                  <input type="hidden" name="scope_list" value="openid"><input type="checkbox" checked disabled>
+                  Get OpenID
+                </label>
+                <ul class="list-unstyled" style="padding-left: 1.5rem;">
+                  {% if 'profile' in scopes %}<li>
+                    <label>
+                      <input type="hidden" name="scope_list" value="profile"><input type="checkbox" checked disabled>
+                      Read profile
+                    </label>
+                  </li>{% endif %}
+                  {% if 'email' in scopes %}<li>
+                    <label>
+                      <input type="hidden" name="scope_list" value="email"><input type="checkbox" checked disabled>
+                      Read email address
+                    </label>
+                  </li>{% endif %}
+                  {% if 'phone' in scopes %}<li>
+                    <label>
+                      <input type="hidden" name="scope_list" value="phone"><input type="checkbox" checked disabled>
+                      Read phone number
+                    </label>
+                  </li>{% endif %}
+                  {% if 'groups' in scopes %}<li>
+                    <label>
+                      <input type="hidden" name="scope_list" value="groups"><input type="checkbox" checked disabled>
+                      Read groups
+                    </label>
+                  </li>{% endif %}
+                </ul>
+              </li>{% endif %}
+            </ul>
+            <hr class="mt-4 mb-4">
+            <div class="form-row mb-2">
+              <div class="col">
+                {% csrf_token %}
+                <button type="submit" name="action" value="cancel" class="btn btn-block btn-light">Cancel</button>
+              </div>
+              <div class="col">
+                <button type="submit" name="action" value="consent" class="btn btn-block btn-success">Approve</button>
+              </div>
+            </div>
+          </form>
+          <p class="text-center">
+            <small>
+              Authorizing will redirect to<br>
+              <b>{{ grant.request.redirect_uri|default:grant.client.get_default_redirect_uri }}</b>
+            </small>
+          </p>
+        </main>
+      </div>
+</body>
+</html>
