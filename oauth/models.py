@@ -1,6 +1,6 @@
 import time
 from datetime import datetime
-from django.contrib.auth.models import User
+from api.models import Customer as User
 from django.db import models
 
 from authlib.oauth2.rfc6749 import ClientMixin, TokenMixin

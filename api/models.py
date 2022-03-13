@@ -1,3 +1,4 @@
+from enum import unique
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Sum
@@ -5,13 +6,20 @@ from djmoney.models.fields import MoneyField
 import datetime
 from django.contrib import admin
 
+from django.contrib.auth.models import AbstractUser
 
-# Create your models here.
+class Customer(AbstractUser):
+    name = models.TextField()
+    cpf = models.IntegerField(unique=True, null=True)
+
+    class Meta:
+        verbose_name = 'Customer'
+        verbose_name_plural = 'Customers'
+
 class BankAccount(models.Model):
     account_id = models.BigAutoField(primary_key=True)
     account_number = models.IntegerField()
-    holder_name = models.TextField()
-    holder_cpf = models.IntegerField()
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
 
     balance_is_up_to_date = models.BooleanField(default=False)
 
@@ -24,7 +32,7 @@ class BankAccount(models.Model):
             return balance_partie1-balance_partie2
 
     def __str__(self):
-        return f'{self.holder_name} - CPF: {self.holder_cpf}'
+        return f'{self.customer.name} - CPF: {self.customer.cpf}'
 
 class Transaction(models.Model):
     transaction_id = models.BigAutoField(primary_key=True)
