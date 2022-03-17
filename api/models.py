@@ -9,6 +9,7 @@ from django.contrib import admin
 from django.contrib.auth.models import AbstractUser
 
 class Customer(AbstractUser):
+    customer_id = models.TextField(editable=False, null=True)
     name = models.TextField()
     cpf = models.IntegerField(unique=True, null=True)
     phone_number = models.IntegerField(unique=True, null=True)
