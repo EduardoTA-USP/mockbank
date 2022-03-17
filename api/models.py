@@ -11,10 +11,14 @@ from django.contrib.auth.models import AbstractUser
 class Customer(AbstractUser):
     name = models.TextField()
     cpf = models.IntegerField(unique=True, null=True)
+    phone_number = models.IntegerField(unique=True, null=True)
 
     class Meta:
         verbose_name = 'Customer'
         verbose_name_plural = 'Customers'
+    
+    def __str__(self):
+        return f'{self.name}, {self.cpf}'
 
 class BankAccount(models.Model):
     account_id = models.BigAutoField(primary_key=True)
