@@ -9,6 +9,7 @@ from django.contrib import admin
 from django.contrib.auth.models import AbstractUser
 
 from django.utils import timezone
+from django.db.models import Q
 
 class Customer(AbstractUser):
     customer_id = models.TextField(editable=False, null=True)
@@ -29,13 +30,33 @@ class BankAccount(models.Model):
     branch_number = models.IntegerField()
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, unique=True)
 
-    @admin.display(description='Balance')
-    def get_balance(self):
-        if not self.balance_is_up_to_date:
-            balance_partie1 = Transaction.objects.filter(partie1=self).aggregate(Sum('transaction_amount'))['transaction_amount__sum']
-            balance_partie2 = Transaction.objects.filter(partie2=self).aggregate(Sum('transaction_amount'))['transaction_amount__sum']
+    # Como é só um MVP, usa-se floats para saldos
+    # mas o certo é usar um integer cuja visualização é com vírgula
+    def checking_sub_account_balance(self):
+        transactions = Transaction.objects.filter(first_partie_bank_account=self).filter(Q(transaction_date__lte=timezone.now()))
+        balance = 0.0
+        for transaction in transactions:
+            if transaction.first_partie_type_of_sub_account == 'CHECKING':
+                if transaction.creditDebitType == 'CREDIT':
+                    balance += transaction.transaction_amount
+                else:
+                    balance -= transaction.transaction_amount
+            else:
+                pass
+        return balance
 
-            return balance_partie1-balance_partie2
+    def savings_sub_account_balance(self):
+        transactions = Transaction.objects.filter(first_partie_bank_account=self).filter(Q(transaction_date__lte=timezone.now()))
+        balance = 0.0
+        for transaction in transactions:
+            if transaction.first_partie_type_of_sub_account == 'SAVINGS':
+                if transaction.creditDebitType == 'CREDIT':
+                    balance += transaction.transaction_amount
+                else:
+                    balance -= transaction.transaction_amount
+            else:
+                pass
+        return balance
 
     def __str__(self):
         return f'Name: {self.customer.name}, CPF: {self.customer.cpf}, Acc.Nº: {self.account_number}, Br.Nº: {self.branch_number}'
