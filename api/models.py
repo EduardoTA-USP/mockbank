@@ -24,9 +24,8 @@ class Customer(AbstractUser):
 class BankAccount(models.Model):
     account_id = models.BigAutoField(primary_key=True)
     account_number = models.IntegerField()
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-
-    balance_is_up_to_date = models.BooleanField(default=False)
+    branch_number = models.IntegerField()
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, unique=True)
 
     @admin.display(description='Balance')
     def get_balance(self):
@@ -37,7 +36,7 @@ class BankAccount(models.Model):
             return balance_partie1-balance_partie2
 
     def __str__(self):
-        return f'{self.customer.name} - CPF: {self.customer.cpf}'
+        return f'Name: {self.customer.name}, CPF: {self.customer.cpf}, Acc.Nº: {self.account_number}, Br.Nº: {self.branch_number}'
 
 class Transaction(models.Model):
     transaction_id = models.BigAutoField(primary_key=True)
