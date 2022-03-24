@@ -10,6 +10,8 @@ from authlib.oauth2.rfc6749.util import scope_to_list, list_to_scope
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 
+from django.utils import timezone
+
 CLIENT_ID_LENGTH = 32
 CLIENT_SECRET_LENGTH = 48
 
@@ -165,12 +167,22 @@ class OAuth2Code(models.Model, AuthorizationCodeMixin):
         verbose_name = "OAuth2 Authorization Code"
         verbose_name_plural = "OAuth2 Authorization Codes"
 
+CONSENT_STATUS_CHOICES = (
+    ('AWAITING_AUTHORISATION', 'AWAITING_AUTHORISATION'),
+    ('AUTHORISED', 'AUTHORISED'),
+    ('REJECTED', 'REJECTED'),
+)
+
 class OAuth2UserConsent(models.Model):
+    consent_id = models.TextField(editable=False, null=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     client = models.ForeignKey(OAuth2Client, on_delete=models.CASCADE)
-    scope = models.TextField(default='')
-    given_at = models.IntegerField(null=False, default=now_timestamp)
-    expires_in = models.IntegerField(null=False, default=0)
+    scope = models.TextField(null=True, blank=True)
+    given_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(null=True)
+    permissions = models.JSONField(null=True)
+    status = models.TextField(choices=CONSENT_STATUS_CHOICES, default='AWAITING_AUTHORISATION')
 
     @cached_property
     def given_at_time(self):
@@ -178,13 +190,16 @@ class OAuth2UserConsent(models.Model):
 
     @cached_property
     def expires_at_time(self):
-        return self.expires_in
+        return self.expires_at
     
     def is_expired(self):
-        return self.given_at + self.expires_in < time.time()
+        return self.expires_at < timezone.now()
+    
+    def is_authorised(self):
+        return True if self.status == 'AUTHORISED' else False
     
     def contains_scope(self, scope):
-        had = scope_to_list(self.scope)
+        had = scope_to_list(scope)
         needed = set(scope_to_list(scope))
         return needed.issubset(had)
     
