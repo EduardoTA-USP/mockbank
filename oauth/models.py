@@ -1,4 +1,4 @@
-import time
+import time, re
 from datetime import datetime
 from api.models import Customer as User
 from django.db import models
@@ -71,7 +71,10 @@ class OAuth2Client(models.Model, ClientMixin):
         return self.default_redirect_uri
 
     def get_allowed_scope(self, scope):
-        return True # TODO: Editar aqui
+        if not scope:
+            return ''
+        allowed = set(scope_to_list(self.scope))
+        return list_to_scope([s for s in scope if s in allowed])
 
     def check_redirect_uri(self, redirect_uri):
         return redirect_uri == self.redirect_uri
@@ -134,13 +137,16 @@ class OAuth2Token(models.Model, TokenMixin):
 
     def get_expires_at(self):
         return self.issued_at + self.expires_in
+
+    def is_expired(self):
+        return self.get_expires_at() < now_timestamp()
+    
+    def is_revoked(self):
+        return False
     
     class Meta:
         verbose_name = "OAuth2 Access Token"
         verbose_name_plural = "OAuth2 Access Tokens"
-
-def now_timestamp():
-    return int(time.time())
 
 class OAuth2Code(models.Model, AuthorizationCodeMixin):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -152,6 +158,7 @@ class OAuth2Code(models.Model, AuthorizationCodeMixin):
     auth_time = models.IntegerField(null=False, default=now_timestamp)
 
     def is_expired(self):
+        # TODO: Colocar um tempo realista para validade de código de autorização
         return self.auth_time + 30000000 < time.time()
 
     def get_redirect_uri(self):
