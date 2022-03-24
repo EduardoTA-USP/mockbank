@@ -59,7 +59,10 @@ class BankAccount(models.Model):
         return balance
 
     def __str__(self):
-        return f'Name: {self.customer.name}, CPF: {self.customer.cpf}, Acc.Nº: {self.account_number}, Br.Nº: {self.branch_number}'
+        try:
+            return f'Name: {self.customer.name}, CPF: {self.customer.cpf}, Acc.Nº: {self.account_number}, Br.Nº: {self.branch_number}'
+        except:
+            return f'DELETED CUSTOMER' # TODO: Lidar com esta exceção de maneira melhor
 
 class Transaction(models.Model):
     CHECKING = 'CHECKING'
