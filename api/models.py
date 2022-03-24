@@ -14,8 +14,8 @@ from django.db.models import Q
 class Customer(AbstractUser):
     customer_id = models.TextField(editable=False, null=True)
     name = models.TextField()
-    cpf = models.IntegerField(unique=True, null=True)
-    phone_number = models.IntegerField(unique=True, null=True)
+    cpf = models.CharField(max_length=14, unique=True, null=True)
+    phone_number = models.CharField(max_length=16, unique=True, null=True)
 
     class Meta:
         verbose_name = 'Customer'
