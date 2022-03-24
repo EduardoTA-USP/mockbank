@@ -1,1 +1,1 @@
-web: gunicorn mockbank.wsgi
+web: gunicorn mockbank.wsgi --log-file - --log-level debug
