@@ -85,55 +85,63 @@ def login(request):
 @csrf_exempt # TODO: CSRF protection with token
 def consents(request, consent_id=None):
     if request.method == 'POST':
-        json_data = json.loads(str(request.body, encoding='utf-8'))
+        try:
+            json_data = json.loads(str(request.body, encoding='utf-8'))
+            user_cpf = json_data['data']['loggedUser']['document']['identification']
 
-        user_cpf = json_data['data']['loggedUser']['document']['identification']
-        user = Customer.objects.filter(cpf=user_cpf).first()
+            permissions = json_data['data']['permissions']
 
-        permissions = json_data['data']['permissions']
+            expires_at = json_data['data']['expirationDateTime']
+            expires_at = re.sub('T', ' ', expires_at)
+            expires_at = re.sub('Z', '+00:00', expires_at)
+            expires_at = datetime.datetime.fromisoformat(expires_at)
 
-        expires_at = json_data['data']['expirationDateTime']
-        expires_at = re.sub('T', ' ', expires_at)
-        expires_at = re.sub('Z', '+00:00', expires_at)
-        expires_at = datetime.datetime.fromisoformat(expires_at)
+            client_id = json_data['data']['client_id']
+            client_secret = json_data['data']['client_secret']
+        except:
+            return JsonResponse({'message': 'Malformed request body'}, status=400)
 
-        client_id = json_data['data']['client_id']
-        client_secret = json_data['data']['client_secret']
+        user = Customer.objects.filter(cpf=user_cpf).first() 
         client = OAuth2Client.objects.filter(client_id=client_id).first()
 
-        if getattr(OAuth2Client.objects.filter(client_id=client_id).first(), 'client_secret', None) == client_secret:
-            consent, created = OAuth2UserConsent.objects.update_or_create(
-                user=user, client=client,
-                defaults={
-                    'consent_id': secrets.token_urlsafe(nbytes=8),
-                    'permissions': permissions,
-                    'expires_at': expires_at,
-                    'created_at': timezone.now(),
-                    'given_at': None,
-                    'status': 'AWAITING_AUTHORISATION' }
-            )
+        if user == None:
+            return JsonResponse({'message': 'User with suplied cpf not found'}, status=404)
+        if client == None:
+            return JsonResponse({'message': 'Invalid consent_id'}, status=404)
+        
+        if timezone.now() >= expires_at:
+            return JsonResponse({'message': 'Invalid expiration datetime'}, status=400)
 
-            # É mais fácil trabalhar com a queryset do que o objeto em si
-            consent_query_set = OAuth2UserConsent.objects.filter(id=consent.id)
-
-            if not created:
-                generate_and_update_consent_id(consent_query_set)
-
-            response = {}
-            response['data'] = {}
-            response['data']['consentId'] = consent_query_set.first().consent_id
-            response['data']['creationDateTime'] = consent_query_set.first().created_at
-            response['data']['status'] = consent_query_set.first().status
-            response['data']['permissions'] = consent_query_set.first().permissions
-            response['data']['expirationDateTime'] = consent_query_set.first().expires_at
-            response['links'] = {}
-
-            # Builds authorization request URI
-            response['links']['self'] = f'{request._current_scheme_host}/consents/{consent_query_set.first().consent_id}'
-
-            return JsonResponse(response, status=201)
-        else:
+        if getattr(client, 'client_secret', None) != client_secret:
             return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
+        
+        consent, created = OAuth2UserConsent.objects.update_or_create(
+            user=user, client=client,
+            defaults={
+                'consent_id': secrets.token_urlsafe(nbytes=8),
+                'scope': None,
+                'status_updated_at': timezone.now(),
+                'expires_at': expires_at,
+                'created_at': timezone.now(),
+                'permissions': permissions,
+                'status': 'AWAITING_AUTHORISATION' }
+        )
+
+        # É mais fácil trabalhar com a queryset do que o objeto em si
+        consent_query_set = OAuth2UserConsent.objects.filter(id=consent.id)
+
+        generate_and_update_consent_id(consent_query_set)
+
+        response = {}
+        response['data'] = {}
+        response['data']['consentId'] = consent_query_set.first().consent_id
+        response['data']['creationDateTime'] = consent_query_set.first().created_at
+        response['data']['status'] = consent_query_set.first().status
+        response['data']['statusUpdateDateTime'] = consent_query_set.first().status_updated_at
+        response['data']['permissions'] = consent_query_set.first().permissions
+        response['data']['expirationDateTime'] = consent_query_set.first().expires_at
+
+        return JsonResponse(response, status=201)
             
     if request.method == 'GET':
         # TODO: get consent info
