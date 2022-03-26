@@ -144,12 +144,37 @@ def consents(request, consent_id=None):
         return JsonResponse(response, status=201)
             
     if request.method == 'GET':
-        # TODO: get consent info
-        return 0
-    
-    if request.method == 'DELETE':
-        # TODO: delete consent
-        return 0
+        try:
+            json_data = json.loads(str(request.body, encoding='utf-8'))
+            client_id = json_data['data']['client_id']
+            client_secret = json_data['data']['client_secret']
+        except:
+            return JsonResponse({'message': 'Malformed request body'}, status=400)
+
+        client = OAuth2Client.objects.filter(client_id=client_id).first()
+        if client == None:
+            return JsonResponse({'message': 'Invalid client_id'}, status=401)
+
+        if getattr(client, 'client_secret', None) != client_secret:
+            return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
+
+        consent = OAuth2UserConsent.objects.filter(consent_id=consent_id).first()
+        if consent == None:
+            return JsonResponse({'message': 'Invalid consent_id'}, status=404)
+
+        if getattr(consent, 'client', None) != client:
+            return JsonResponse({'message': 'Request\'s client_id dosen\'t match consent\'s client_id'}, status=401)
+        
+        response = {}
+        response['data'] = {}
+        response['data']['consentId'] = consent.consent_id
+        response['data']['creationDateTime'] = consent.created_at
+        response['data']['status'] = consent.status
+        response['data']['statusUpdateDateTime'] = consent.status_updated_at
+        response['data']['permissions'] = consent.permissions
+        response['data']['expirationDateTime'] = consent.expires_at
+        return JsonResponse(response, status=200)
+
 
 def client_has_user_consent(client, user, scope):
     try:
