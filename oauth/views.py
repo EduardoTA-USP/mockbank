@@ -80,10 +80,18 @@ def login(request):
     template = loader.get_template('login.html')
     return HttpResponse(template.render(None, request))
 
+@csrf_exempt
+def consents_dispatcher(request, consent_id=None):
+    if request.method in ["POST", "GET"]:
+        return consents_get_post(request, consent_id=consent_id)
+    else:
+        return consents_delete(request, consent_id=consent_id)
+
 # Consent create
 # TODO: client_credentials client authentication for route
 @csrf_exempt # TODO: CSRF protection with token
-def consents(request, consent_id=None):
+@require_http_methods(["POST", "GET"])
+def consents_get_post(request, consent_id=None):
     if request.method == 'POST':
         try:
             json_data = json.loads(str(request.body, encoding='utf-8'))
@@ -174,6 +182,41 @@ def consents(request, consent_id=None):
         response['data']['permissions'] = consent.permissions
         response['data']['expirationDateTime'] = consent.expires_at
         return JsonResponse(response, status=200)
+
+from authlib.integrations.django_oauth2 import ResourceProtector, BearerTokenValidator
+from oauth.models import OAuth2Token
+require_oauth = ResourceProtector()
+require_oauth.register_token_validator(BearerTokenValidator(OAuth2Token))
+
+@csrf_exempt # TODO: CSRF protection with token
+@require_oauth()
+@require_http_methods(["DELETE"])
+def consents_delete(request, consent_id=None):
+    try:
+        json_data = json.loads(str(request.body, encoding='utf-8'))
+        client_id = json_data['data']['client_id']
+        client_secret = json_data['data']['client_secret']
+    except:
+        return JsonResponse({'message': 'Malformed request body'}, status=400)
+
+    if client_id != request.oauth_token.client_id:
+        return JsonResponse({'message': 'Wrong client_id'}, status=401)
+
+    client = OAuth2Client.objects.filter(client_id=client_id).first()
+    if client == None:
+        return JsonResponse({'message': 'Client was deleted'}, status=404)
+
+    if getattr(client, 'client_secret', None) != client_secret:
+            return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
+
+    user = request.oauth_token.user
+
+    consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).first()
+    if consent == None:
+        return JsonResponse({'message': 'This consent object doesn\'t exist'}, status=404)
+
+    OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).delete()
+    return JsonResponse({'message': 'Consent successfully deleted'}, status=204)
 
 
 def client_has_user_consent(client, user, scope):
