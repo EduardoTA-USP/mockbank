@@ -49,8 +49,7 @@ def authorize(request):
 
     if request.method == 'GET':
         # TODO: verificar se os parâmetros fornecidos na query dão match com o consent referenciado por consent_id
-        c = client_has_user_consent(client, request.user, scope)
-        if c:
+        if client_has_user_consent(client, request.user, scope):
             # skip consent and granted
             return server.create_authorization_response(request, grant_user=request.user)
         context = dict(grant=grant, client=client, scope=request.GET['scope'], user=request.user)
@@ -58,6 +57,7 @@ def authorize(request):
     if request.method == 'POST':
         if not is_user_consented(request):
             OAuth2UserConsent.objects.filter(user=request.user, client=grant.client).update(status='REJECTED')           
+            OAuth2UserConsent.objects.filter(user=request.user, client=grant.client).update(status_updated_at=timezone.now())           
 
             # denied by resource owner
             return server.create_authorization_response(request, grant_user=None)
