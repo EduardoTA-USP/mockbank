@@ -185,15 +185,15 @@ class OAuth2UserConsent(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     client = models.ForeignKey(OAuth2Client, on_delete=models.CASCADE)
     scope = models.TextField(null=True, blank=True)
-    given_at = models.DateTimeField(null=True, blank=True)
+    status_updated_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True)
     created_at = models.DateTimeField(null=True)
     permissions = models.JSONField(null=True)
     status = models.TextField(choices=CONSENT_STATUS_CHOICES, default='AWAITING_AUTHORISATION')
 
-    @cached_property
-    def given_at_time(self):
-        return self.given_at
+    #@cached_property
+    def status_updated_at_time(self):
+        return self.status_updated_at
 
     @cached_property
     def expires_at_time(self):
