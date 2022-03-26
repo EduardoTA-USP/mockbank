@@ -187,10 +187,10 @@ def is_user_consented(request):
     return request.POST.get('action') == 'consent'
 
 def set_client_user_consent(client, user, scope):
-    given_at = timezone.now()
+    status_updated_at = timezone.now()
 
     OAuth2UserConsent.objects.filter(client=client, user=user).update(
-        given_at = given_at,
+        status_updated_at = status_updated_at,
         status = 'AUTHORISED',
         scope = scope
     )
