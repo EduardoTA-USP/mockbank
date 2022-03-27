@@ -37,22 +37,39 @@ def authorize(request):
         raise Http404(e)
     client = grant.client
 
-    consent_id = re.findall('(?<=consent:)\S*', request.GET['scope'])
-    scope = request.GET['scope'].split()
+    try:
+        consent_id = re.findall('(?<=consent:)\S*', request.GET['scope'])
+    except:
+        consent_id = None
+        print("WARNING: Authorization request without consent_id")
+    try:
+        scope = request.GET['scope'].split()
+    except:
+        # If no scope is suplied, use the default
+        scope = ['accounts']
     regex = re.compile("consent\:.*")
     for index, item in enumerate(scope):
         if re.search(regex, item):
             consent_id = item
-    scope.remove(consent_id)
+    if consent_id:
+        scope.remove(consent_id)
 
     scope = client.get_allowed_scope(scope)
 
+    if consent_id == None:
+        consent = OAuth2UserConsent.objects.filter(user=request.user, client=grant.client).first()
+    else:
+        consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=request.user, client=grant.client).first()
+    
+    is_consent_invalid = consent == None or getattr(consent, 'status', None) == 'REJECTED' or getattr(consent, 'is_expired', None)()
+    if is_consent_invalid:
+        return server.create_authorization_response(request, grant_user=None)
+
     if request.method == 'GET':
-        # TODO: verificar se os parâmetros fornecidos na query dão match com o consent referenciado por consent_id
         if client_has_user_consent(client, request.user, scope):
             # skip consent and granted
             return server.create_authorization_response(request, grant_user=request.user)
-        context = dict(grant=grant, client=client, scope=request.GET['scope'], user=request.user)
+        context = dict(grant=grant, client=client, scope=scope, consent=consent, user=request.user)
         return render(request, 'authorize.html', context)
     if request.method == 'POST':
         if not is_user_consented(request):
