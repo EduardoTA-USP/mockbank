@@ -11,7 +11,7 @@ from authlib.integrations.django_helpers import create_oauth_request
 from . import models, grants
 
 from .models import ( OAuth2Client, OAuth2Token )
-from .grants import ( AuthorizationCodeGrant )
+from .grants import ( AuthorizationCodeGrant, ImplicitGrant )
 
 class AuthorizationServer(_AuthorizationServer):
     def create_oauth2_request(self, request):
@@ -45,3 +45,4 @@ class AuthorizationServer(_AuthorizationServer):
         
 server = AuthorizationServer(OAuth2Client, OAuth2Token)
 server.register_grant(AuthorizationCodeGrant)
+server.register_grant(ImplicitGrant)
