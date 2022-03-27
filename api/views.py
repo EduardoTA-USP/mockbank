@@ -1,4 +1,5 @@
-from authlib.integrations.django_oauth2 import ResourceProtector, BearerTokenValidator
+from authlib.integrations.django_oauth2 import ResourceProtector
+from oauth.validators import BearerTokenValidator
 from django.http import JsonResponse
 from oauth.models import OAuth2Token
 
@@ -31,6 +32,7 @@ def transactions(request):
         _dict = {}
         _dict['creditDebitType'] = transaction.creditDebitType
         _dict['transactionName'] = transaction.transaction_description
+        _dict['transactionTypeOfSubaccount'] = transaction.first_partie_type_of_sub_account
         _dict['amount'] = transaction.transaction_amount
         _dict['transactionDate'] = transaction.transaction_date
         response['data'].append(_dict)

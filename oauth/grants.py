@@ -1,12 +1,13 @@
 from authlib.oauth2.rfc6749.grants import (
-    AuthorizationCodeGrant as _AuthorizationCodeGrant, AuthorizationEndpointMixin, TokenEndpointMixin
+    AuthorizationCodeGrant as _AuthorizationCodeGrant, AuthorizationEndpointMixin, TokenEndpointMixin,
+    ImplicitGrant as _ImplicitGrant
 )
 from authlib.oauth2.rfc6749.errors import (
     InvalidClientError, UnauthorizedClientError, AccessDeniedError
 )
 from authlib.oauth2.base import OAuth2Error
 from authlib.common.urls import add_params_to_uri
-from .models import OAuth2Code
+from .models import OAuth2Client, OAuth2Code
 
 from django.http import JsonResponse
 import re
@@ -93,3 +94,37 @@ class AuthorizationCodeGrant(_AuthorizationCodeGrant):
     #     headers = [('Location', uri)]
     #     return 302, '', headers
 
+class ImplicitGrant(_ImplicitGrant):
+    def validate_authorization_request(self):
+        request = self.request
+        
+        only_one_client_in_database = request.integration_request.GET.get('only_one_client_in_database', None)
+        if only_one_client_in_database == None:
+            client_id = request.client_id
+        else:
+            client_id = OAuth2Client.objects.all().first().client_id
+
+        if client_id is None:
+            raise InvalidClientError(JsonResponse({f'message': 'client_id not present or client was deleted'}, status=401))
+
+        client = self.server.query_client(client_id)
+        if not client:
+            raise InvalidClientError(JsonResponse({f'message': 'No registered client with client_id={client_id}'}, status=401))
+
+        redirect_uri = client.get_default_redirect_uri()
+        response_type = request.response_type
+        if not client.check_response_type(response_type):
+            raise UnauthorizedClientError(
+                f'The client is not authorized to use "response_type={response_type}"',
+                state=self.request.state,
+                redirect_uri=redirect_uri,
+            )
+
+        try:
+            self.request.client = client
+            self.validate_requested_scope()
+            self.execute_hook('after_validate_authorization_request')
+        except OAuth2Error as error:
+            error.redirect_uri = redirect_uri
+            raise error
+        return redirect_uri

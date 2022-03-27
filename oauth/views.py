@@ -37,22 +37,39 @@ def authorize(request):
         raise Http404(e)
     client = grant.client
 
-    consent_id = re.findall('(?<=consent:)\S*', request.GET['scope'])
-    scope = request.GET['scope'].split()
+    try:
+        consent_id = re.findall('(?<=consent:)\S*', request.GET['scope'])
+    except:
+        consent_id = None
+        print("WARNING: Authorization request without consent_id")
+    try:
+        scope = request.GET['scope'].split()
+    except:
+        # If no scope is suplied, use the default
+        scope = ['accounts']
     regex = re.compile("consent\:.*")
     for index, item in enumerate(scope):
         if re.search(regex, item):
             consent_id = item
-    scope.remove(consent_id)
+    if consent_id:
+        scope.remove(consent_id)
 
     scope = client.get_allowed_scope(scope)
 
+    if consent_id == None:
+        consent = OAuth2UserConsent.objects.filter(user=request.user, client=grant.client).first()
+    else:
+        consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=request.user, client=grant.client).first()
+    
+    is_consent_invalid = consent == None or getattr(consent, 'status', None) == 'REJECTED' or getattr(consent, 'is_expired', None)()
+    if is_consent_invalid:
+        return server.create_authorization_response(request, grant_user=None)
+
     if request.method == 'GET':
-        # TODO: verificar se os parâmetros fornecidos na query dão match com o consent referenciado por consent_id
         if client_has_user_consent(client, request.user, scope):
             # skip consent and granted
             return server.create_authorization_response(request, grant_user=request.user)
-        context = dict(grant=grant, client=client, scope=request.GET['scope'], user=request.user)
+        context = dict(grant=grant, client=client, scope=scope, consent=consent, user=request.user)
         return render(request, 'authorize.html', context)
     if request.method == 'POST':
         if not is_user_consented(request):
@@ -104,23 +121,29 @@ def consents_get_post(request, consent_id=None):
             expires_at = re.sub('Z', '+00:00', expires_at)
             expires_at = datetime.datetime.fromisoformat(expires_at)
 
-            client_id = json_data['data']['client_id']
-            client_secret = json_data['data']['client_secret']
+            only_one_client_in_database = json_data['data'].get('only_one_client_in_database', None)
+
+            if only_one_client_in_database == None:
+                client_id = json_data['data']['client_id']
+                client_secret = json_data['data']['client_secret']
         except:
             return JsonResponse({'message': 'Malformed request body'}, status=400)
 
-        user = Customer.objects.filter(cpf=user_cpf).first() 
-        client = OAuth2Client.objects.filter(client_id=client_id).first()
+        user = Customer.objects.filter(cpf=user_cpf).first()
+        if only_one_client_in_database == None:
+            client = OAuth2Client.objects.filter(client_id=client_id).first()
+        else:
+            client = OAuth2Client.objects.all().first()
 
         if user == None:
             return JsonResponse({'message': 'User with suplied cpf not found'}, status=404)
         if client == None:
-            return JsonResponse({'message': 'Invalid consent_id'}, status=404)
+            return JsonResponse({'message': 'Invalid client_id or no client registered'}, status=404)
         
         if timezone.now() >= expires_at:
             return JsonResponse({'message': 'Invalid expiration datetime'}, status=400)
 
-        if getattr(client, 'client_secret', None) != client_secret:
+        if only_one_client_in_database == None and getattr(client, 'client_secret', None) != client_secret:
             return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
         
         consent, created = OAuth2UserConsent.objects.update_or_create(
@@ -154,24 +177,39 @@ def consents_get_post(request, consent_id=None):
     if request.method == 'GET':
         try:
             json_data = json.loads(str(request.body, encoding='utf-8'))
-            client_id = json_data['data']['client_id']
-            client_secret = json_data['data']['client_secret']
+
+            # User CPF as an alternative to consent_id
+            user_cpf = json_data['data'].get('user_cpf', None)
+            only_one_client_in_database = json_data['data'].get('only_one_client_in_database', None)
+
+            if user_cpf == None and only_one_client_in_database == None:
+                client_id = json_data['data']['client_id']
+                client_secret = json_data['data']['client_secret']
         except:
             return JsonResponse({'message': 'Malformed request body'}, status=400)
 
-        client = OAuth2Client.objects.filter(client_id=client_id).first()
-        if client == None:
-            return JsonResponse({'message': 'Invalid client_id'}, status=401)
+        if user_cpf == None and only_one_client_in_database == None:
+            client = OAuth2Client.objects.filter(client_id=client_id).first()
+            if client == None:
+                return JsonResponse({'message': 'Invalid client_id'}, status=401)
 
-        if getattr(client, 'client_secret', None) != client_secret:
-            return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
+            if getattr(client, 'client_secret', None) != client_secret:
+                return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
 
-        consent = OAuth2UserConsent.objects.filter(consent_id=consent_id).first()
-        if consent == None:
-            return JsonResponse({'message': 'Invalid consent_id'}, status=404)
+            consent = OAuth2UserConsent.objects.filter(consent_id=consent_id).first()
+            if consent == None:
+                return JsonResponse({'message': 'Invalid consent_id'}, status=404)
 
-        if getattr(consent, 'client', None) != client:
-            return JsonResponse({'message': 'Request\'s client_id dosen\'t match consent\'s client_id'}, status=401)
+            if getattr(consent, 'client', None) != client:
+                return JsonResponse({'message': 'Request\'s client_id dosen\'t match consent\'s client_id'}, status=401)
+        else:
+            # User CPF as an alternative to consent_id
+            user = Customer.objects.filter(cpf=user_cpf).first()
+            if user == None:
+                return JsonResponse({'message': 'User with suplied cpf not found'}, status=404)
+            consent = OAuth2UserConsent.objects.filter(user=user).first()
+            if consent == None:
+                return JsonResponse({'message': 'No consent object was found'}, status=404)
         
         response = {}
         response['data'] = {}
@@ -194,28 +232,44 @@ require_oauth.register_token_validator(BearerTokenValidator(OAuth2Token))
 def consents_delete(request, consent_id=None):
     try:
         json_data = json.loads(str(request.body, encoding='utf-8'))
-        client_id = json_data['data']['client_id']
-        client_secret = json_data['data']['client_secret']
+         # User CPF as an alternative to consent_id
+        user_cpf = json_data['data'].get('user_cpf', None)
+        only_one_client_in_database = json_data['data'].get('only_one_client_in_database', None)
+
+        if user_cpf == None and only_one_client_in_database == None:
+            client_id = json_data['data']['client_id']
+            client_secret = json_data['data']['client_secret']
     except:
         return JsonResponse({'message': 'Malformed request body'}, status=400)
 
-    if client_id != request.oauth_token.client_id:
-        return JsonResponse({'message': 'Wrong client_id'}, status=401)
+    if user_cpf == None and only_one_client_in_database == None:
+        if client_id != request.oauth_token.client_id:
+            return JsonResponse({'message': 'Wrong client_id'}, status=401)
+    else:
+        client_id = request.oauth_token.client_id
 
     client = OAuth2Client.objects.filter(client_id=client_id).first()
     if client == None:
         return JsonResponse({'message': 'Client was deleted'}, status=404)
 
-    if getattr(client, 'client_secret', None) != client_secret:
+    if user_cpf == None and only_one_client_in_database == None:
+        if getattr(client, 'client_secret', None) != client_secret:
             return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
 
     user = request.oauth_token.user
+    if user_cpf != None and user.cpf != user_cpf:
+        return JsonResponse({'message': 'Suplied user_cpf doesn\'t match access token\'s user'}, status=401)
 
-    consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).first()
+    if user_cpf == None and only_one_client_in_database == None:
+        consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).first()
+    else:
+        consent = OAuth2UserConsent.objects.filter(user=user, client=client).first()
+
     if consent == None:
         return JsonResponse({'message': 'This consent object doesn\'t exist'}, status=404)
+    OAuth2UserConsent.objects.filter(consent_id=consent.consent_id, user=user, client=client).delete()
 
-    OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).delete()
+
     return JsonResponse({'message': 'Consent successfully deleted'}, status=204)
 
 
