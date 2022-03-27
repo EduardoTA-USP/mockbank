@@ -1,4 +1,5 @@
-from authlib.integrations.django_oauth2 import ResourceProtector, BearerTokenValidator
+from authlib.integrations.django_oauth2 import ResourceProtector
+from oauth.validators import BearerTokenValidator
 from django.http import JsonResponse
 from oauth.models import OAuth2Token
 
