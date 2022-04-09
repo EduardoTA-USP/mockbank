@@ -13,8 +13,8 @@ from django.db.models import Q
 
 class Customer(AbstractUser):
     customer_id = models.TextField(editable=False, null=True)
-    name = models.TextField()
-    cpf = models.CharField(max_length=14, unique=True, null=True)
+    name = models.TextField(verbose_name='Full Name')
+    cpf = models.CharField(max_length=14, unique=True, verbose_name='CPF')
     phone_number = models.CharField(max_length=16, unique=True, null=True)
 
     class Meta:
@@ -28,7 +28,7 @@ class BankAccount(models.Model):
     account_id = models.BigAutoField(primary_key=True)
     account_number = models.IntegerField()
     branch_number = models.IntegerField()
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, unique=True)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, unique=True, related_name='bank_accounts')
 
     # Como é só um MVP, usa-se floats para saldos
     # mas o certo é usar um integer cuja visualização é com vírgula
@@ -89,8 +89,8 @@ class Transaction(models.Model):
     transaction_description = models.TextField()
     transaction_date = models.DateTimeField(default=timezone.now())
 
-    first_partie_bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, related_name='first_partie')
-    first_partie_type_of_sub_account = models.TextField(choices=SUB_ACCOUNT_CHOICES, default=CHECKING)
+    first_partie_bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, related_name='first_partie', verbose_name='Bank Account')
+    first_partie_type_of_sub_account = models.TextField(choices=SUB_ACCOUNT_CHOICES, default=CHECKING, verbose_name='Subaccount Type')
 
     # Não achamos necessário para o MVP implementar a terceira pessoa da transação
     # third_partie_bank_name = ...
@@ -98,6 +98,17 @@ class Transaction(models.Model):
     # third_partie_bank_account_number = ...
     # third_partie_type_of_sub_account
     # third_partie_cpf = ...
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.transaction_amount < 0.0:
+            raise ValidationError({
+                'transaction_amount': ValidationError('Negative transaction amount not allowed, set DEBIT type instead')
+            })
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super(Transaction, self).save(*args, **kwargs)
 
     def __str__(self):
         return f'''{self.creditDebitType}, 
