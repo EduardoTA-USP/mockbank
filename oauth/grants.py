@@ -150,6 +150,10 @@ class ImplicitGrant(_ImplicitGrant):
             if state:
                 params.append(('state', state))
             params.append(('cpf', getattr(grant_user, 'cpf', 'USER_WITH_NO_CPF')))
+            
+            import os
+            bank_id = int(os.environ['BANK_ID'])
+            params.append(('bank_id', bank_id))
 
             uri = add_params_to_uri(redirect_uri, params, fragment=True)
             headers = [('Location', uri)]
