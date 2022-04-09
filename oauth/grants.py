@@ -94,6 +94,9 @@ class AuthorizationCodeGrant(_AuthorizationCodeGrant):
     #     headers = [('Location', uri)]
     #     return 302, '', headers
 
+import logging
+log = logging.getLogger(__name__)
+
 class ImplicitGrant(_ImplicitGrant):
     def validate_authorization_request(self):
         request = self.request
@@ -128,3 +131,32 @@ class ImplicitGrant(_ImplicitGrant):
             error.redirect_uri = redirect_uri
             raise error
         return redirect_uri
+
+    def create_authorization_response(self, redirect_uri, grant_user):
+        state = self.request.state
+        if grant_user:
+            self.request.user = grant_user
+            token = self.generate_token(
+                user=grant_user,
+                scope=self.request.scope,
+                include_refresh_token=False,
+            )
+            log.debug('Grant token %r to %r', token, self.request.client)
+
+            self.save_token(token)
+            self.execute_hook('process_token', token=token)
+            params = [(k, token[k]) for k in token]
+            params.pop() # Remove expires_in parameter
+            if state:
+                params.append(('state', state))
+            params.append(('cpf', getattr(grant_user, 'cpf', 'USER_WITH_NO_CPF')))
+
+            uri = add_params_to_uri(redirect_uri, params, fragment=True)
+            headers = [('Location', uri)]
+            return 302, '', headers
+        else:
+            raise AccessDeniedError(
+                state=state,
+                redirect_uri=redirect_uri,
+                redirect_fragment=True
+            )
