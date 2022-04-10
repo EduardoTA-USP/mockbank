@@ -8,6 +8,7 @@
 </head>
 <body>
     <div id="app" class="d-flex justify-content-center align-items-center">
+        <a href="/accounts/login/?next={{ request.get_full_path|urlencode }}">Log In as Another User</a>
         <main class="auth-container" style="min-height: auto;">
           <header class="header">
             <h2>Authorize {{ grant.client.client_name }}</h2>
