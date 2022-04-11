@@ -227,7 +227,7 @@ require_oauth = ResourceProtector()
 require_oauth.register_token_validator(BearerTokenValidator(OAuth2Token))
 
 @csrf_exempt # TODO: CSRF protection with token
-@require_oauth()
+#@require_oauth()
 @require_http_methods(["DELETE"])
 def consents_delete(request, consent_id=None):
     try:
