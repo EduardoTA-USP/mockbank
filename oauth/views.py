@@ -241,34 +241,48 @@ def consents_delete(request, consent_id=None):
             client_secret = json_data['data']['client_secret']
     except:
         return JsonResponse({'message': 'Malformed request body'}, status=400)
+    if getattr(request, 'oauth_token', False):
+        if user_cpf == None and only_one_client_in_database == None:
+            if client_id != request.oauth_token.client_id:
+                return JsonResponse({'message': 'Wrong client_id'}, status=401)
+        else:
+            client_id = request.oauth_token.client_id
 
-    if user_cpf == None and only_one_client_in_database == None:
-        if client_id != request.oauth_token.client_id:
-            return JsonResponse({'message': 'Wrong client_id'}, status=401)
+        client = OAuth2Client.objects.filter(client_id=client_id).first()
+        if client == None:
+            return JsonResponse({'message': 'Client was deleted'}, status=404)
+
+        if user_cpf == None and only_one_client_in_database == None:
+            if getattr(client, 'client_secret', None) != client_secret:
+                return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
+
+        user = request.oauth_token.user
+        if user_cpf != None and user.cpf != user_cpf:
+            return JsonResponse({'message': 'Suplied user_cpf doesn\'t match access token\'s user'}, status=401)
+
+        if user_cpf == None and only_one_client_in_database == None:
+            consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).first()
+        else:
+            consent = OAuth2UserConsent.objects.filter(user=user, client=client).first()
+
+        if consent == None:
+            return JsonResponse({'message': 'This consent object doesn\'t exist'}, status=404)
+        
+        OAuth2UserConsent.objects.filter(consent_id=consent.consent_id, user=user, client=client).delete()
     else:
-        client_id = request.oauth_token.client_id
+        client = OAuth2Client.objects.all().first()
+        if not client:
+            return JsonResponse({'message': 'Client was deleted'}, status=404)
 
-    client = OAuth2Client.objects.filter(client_id=client_id).first()
-    if client == None:
-        return JsonResponse({'message': 'Client was deleted'}, status=404)
+        user = Customer.objects.filter(cpf=user_cpf).first()
+        if not user:
+            return JsonResponse({'message': 'User with suplied user_cpf doesn\'t exist'}, status=404)
 
-    if user_cpf == None and only_one_client_in_database == None:
-        if getattr(client, 'client_secret', None) != client_secret:
-            return JsonResponse({'message': 'client authentication failed, check client_id or client_secret'}, status=401)
-
-    user = request.oauth_token.user
-    if user_cpf != None and user.cpf != user_cpf:
-        return JsonResponse({'message': 'Suplied user_cpf doesn\'t match access token\'s user'}, status=401)
-
-    if user_cpf == None and only_one_client_in_database == None:
-        consent = OAuth2UserConsent.objects.filter(consent_id=consent_id, user=user, client=client).first()
-    else:
         consent = OAuth2UserConsent.objects.filter(user=user, client=client).first()
+        if not consent:
+            return JsonResponse({'message': 'Consent object for user {user} and client {client} doesn\'t exist'}, status=404) 
 
-    if consent == None:
-        return JsonResponse({'message': 'This consent object doesn\'t exist'}, status=404)
-    OAuth2UserConsent.objects.filter(consent_id=consent.consent_id, user=user, client=client).delete()
-
+        OAuth2UserConsent.objects.filter(user=user, client=client).delete()
 
     return JsonResponse({'message': 'Consent successfully deleted'}, status=204)
 
